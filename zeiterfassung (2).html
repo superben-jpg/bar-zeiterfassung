@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bar Zeiterfassung</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg: #16130f;
+    --bg-2: #1f1a14;
+    --panel: #24201a;
+    --line: #3a3327;
+    --amber: #e8a13d;
+    --amber-dim: #7a5a24;
+    --text: #f2ead9;
+    --text-dim: #a89a80;
+    --green: #6fae6f;
+    --red: #c96a53;
+    --blue: #6a9ac9;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    background: radial-gradient(circle at 50% 0%, var(--bg-2), var(--bg) 70%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .wrap{
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 24px 20px 40px;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+  }
+  .eyebrow{
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  h1{
+    font-size: 22px;
+    margin: 0 0 2px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .sub{ color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+
+  .name-list{ display:flex; flex-direction:column; gap:10px; margin-top: 12px; }
+  .name-btn{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 16px 18px;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 600;
+    text-align:left;
+    cursor:pointer;
+  }
+  .name-btn:active{ background: var(--amber-dim); }
+  .add-name-form{ display:flex; gap:8px; margin-top: 6px; }
+  .add-name-form input{
+    flex:1;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  .add-name-form button{
+    background: var(--amber);
+    color: #241a0a;
+    border:none;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor:pointer;
+  }
+
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom: 14px;
+  }
+  .whoami{ font-size: 13px; color: var(--text-dim); }
+  .whoami b{ color: var(--text); }
+  .linkbtn{
+    background: none; border:none; color: var(--text-dim);
+    font-size: 12px; text-decoration: underline;
+    cursor:pointer; padding: 4px;
+  }
+  .tabbar{
+    display:flex; gap:8px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabbtn{
+    background:none; border:none; color: var(--text-dim);
+    font-size: 13px; font-weight:600; padding: 8px 4px 10px;
+    cursor:pointer; border-bottom: 2px solid transparent;
+  }
+  .tabbtn.active{ color: var(--amber); border-bottom-color: var(--amber); }
+
+  .status-card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .status-row{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
+  .status-label{ font-size: 12px; color: var(--text-dim); text-transform:uppercase; letter-spacing:0.08em;}
+  .status-value{ font-size: 15px; font-weight:700; }
+  .status-value.active{ color: var(--green); }
+  .status-value.paused{ color: var(--amber); }
+  .status-value.off{ color: var(--text-dim); }
+  .status-date{ font-size:13px; color:var(--text-dim); margin-bottom:8px; }
+
+  .actions{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .action-btn{
+    border-radius: 14px;
+    padding: 20px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    transition: transform 0.05s ease;
+  }
+  .action-btn:active{ transform: scale(0.97); }
+  .action-btn:disabled{ opacity: 0.3; cursor:not-allowed; }
+  .action-btn .ico{ font-size: 22px; }
+  .btn-start{ background: linear-gradient(180deg,#2f5a3a,#264a30); color: #cdeecb; border-color:#3d6f4a;}
+  .btn-pause-start{ background: linear-gradient(180deg,#5a4420,#4a381a); color: #f3dba8; border-color:#7a5a24;}
+  .btn-pause-end{ background: linear-gradient(180deg,#5a4420,#4a381a); color: #f3dba8; border-color:#7a5a24;}
+  .btn-end{ background: linear-gradient(180deg,#5a2f2f,#4a2626); color: #f0c9c0; border-color:#7a3d3d;}
+
+  .section-title{
+    font-size: 12px; text-transform:uppercase; letter-spacing:0.1em;
+    color: var(--text-dim); margin: 6px 0 10px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .entry-list{ display:flex; flex-direction:column; gap:8px; margin-bottom: 20px;}
+  .entry{
+    display:flex; justify-content:space-between; align-items:center;
+    background: var(--bg-2); border:1px solid var(--line);
+    padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  }
+  .entry .typ{ color: var(--text); font-weight:600; }
+  .entry .zeit{ color: var(--text-dim); }
+  .empty-hint{ color: var(--text-dim); font-size: 13px; padding: 12px 0;}
+
+  .day-total{
+    background: var(--bg-2);
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+  }
+  .day-total b{ color: var(--amber); }
+
+  footer{ text-align:center; padding: 10px 0 4px; }
+
+  .pin-box{ display:flex; flex-direction:column; gap:12px; margin-top: 20px; }
+  .pin-box input{
+    background: var(--bg-2); border:1px solid var(--line); color: var(--text);
+    padding: 16px; border-radius: 10px; font-size: 20px; letter-spacing: 0.3em;
+    text-align:center;
+  }
+  .pin-box button{
+    background: var(--amber); color:#241a0a; border:none; padding:14px;
+    border-radius: 10px; font-weight:700; font-size:15px; cursor:pointer;
+  }
+  .error{ color: var(--red); font-size: 13px; }
+
+  .admin-emp-block{
+    background: var(--panel); border:1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .admin-emp-name{ font-weight:700; font-size:15px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .admin-emp-name .badge{ font-size:11px; color: var(--text-dim); font-weight:400; }
+
+  .settings-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background: var(--panel); border:1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 12px; font-size: 14px;
+  }
+  .settings-row input{
+    background: var(--bg-2); border:1px solid var(--line); color: var(--text);
+    padding: 8px 10px; border-radius: 8px; width: 90px; text-align:center; font-size:14px;
+  }
+  .small-btn{
+    background: var(--amber-dim); color: var(--text); border:none;
+    padding: 8px 12px; border-radius: 8px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .loading{ text-align:center; padding: 40px 0; color: var(--text-dim); }
+
+  .week-nav{ display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; }
+  .week-nav button{
+    background: var(--panel); border:1px solid var(--line); color: var(--text);
+    width:36px; height:36px; border-radius:10px; font-size:16px; cursor:pointer;
+  }
+  .week-nav .weeklabel{ font-size:13px; color: var(--text-dim); font-weight:600; }
+
+  .day-card{
+    background: var(--panel); border:1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .day-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .day-card-head .dname{ font-weight:700; font-size:14px; }
+  .day-card-head .ddate{ font-size:12px; color: var(--text-dim); }
+  .day-inputs{ display:flex; gap:8px; align-items:center; }
+  .day-inputs input[type=time]{
+    background: var(--bg-2); border:1px solid var(--line); color: var(--text);
+    padding: 8px; border-radius: 8px; font-size:14px; flex:1;
+  }
+  .free-toggle{
+    display:flex; align-items:center; gap:6px; font-size:12px; color: var(--text-dim);
+    margin-top:8px; cursor:pointer;
+  }
+  .free-toggle input{ width:16px; height:16px; }
+
+  .savebar{ position: sticky; bottom: 0; background: var(--bg); padding: 12px 0 4px; }
+  .savebar button{
+    width:100%; background: var(--amber); color:#241a0a; border:none;
+    padding: 15px; border-radius: 12px; font-weight:700; font-size:15px; cursor:pointer;
+  }
+
+  .compare-card{
+    background: var(--panel); border:1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .compare-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .compare-head .dname{ font-weight:700; font-size:14px; }
+  .compare-row{ display:flex; justify-content:space-between; font-size:13px; color: var(--text-dim); margin-bottom:2px;}
+  .compare-row b{ color: var(--text); }
+  .diff-pill{ display:inline-block; padding: 2px 8px; border-radius: 8px; font-size:12px; font-weight:700; }
+  .diff-pos{ background: rgba(111,174,111,0.15); color: var(--green); }
+  .diff-neg{ background: rgba(201,106,83,0.15); color: var(--red); }
+  .diff-zero{ background: rgba(168,154,128,0.15); color: var(--text-dim); }
+
+  .week-summary{
+    background: var(--bg-2); border:1px dashed var(--line); border-radius:12px;
+    padding: 14px 16px; margin-bottom:18px; font-size:13px;
+  }
+  .week-summary .big{ font-size:18px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="loading">Lädt…</div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://crvvqcurljmmgpajyfei.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNydnZxY3VybGptbWdwYWp5ZmVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMTI2NDUsImV4cCI6MjA5ODY4ODY0NX0.-OVqbDvrBZm1-syJrsS_bzYqur9d62_Xx5Gj4tiM9tg";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TYP_LABEL = {
+  arbeitsbeginn: "Arbeitsbeginn",
+  pause_beginn: "Pause Beginn",
+  pause_ende: "Pause Ende",
+  arbeitsende: "Arbeitsende"
+};
+const TYP_ICON = { arbeitsbeginn: "▶", pause_beginn: "⏸", pause_ende: "▶", arbeitsende: "■" };
+const WOCHENTAGE = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const WOCHENTAGE_KURZ = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const SOLL_TYP_LABEL = { arbeit: "Arbeit", urlaub: "Urlaub", wft: "Wochenfeiertag", krank: "Krank" };
+
+let state = {
+  view: "loading",
+  tab: "heute",
+  employees: [],
+  currentEmployeeId: localStorage.getItem("zt_employee_id") || null,
+  currentEmployeeName: localStorage.getItem("zt_employee_name") || null,
+  todayEntries: [],
+  weekOffset: 0,
+  weekSollDraft: {},
+  weekEntries: {},
+  weekSoll: {},
+  referenzstaende: [],
+  adminData: null,
+  adminPinValue: null,
+  adminEditingEntry: null,
+  adminTab: "heute",
+  adminLog: [],
+  errorMsg: null
+};
+
+const app = document.getElementById("app");
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function fmtTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDateShort(dateObj){
+  return `${WOCHENTAGE_KURZ[dateObj.getDay()]} ${pad(dateObj.getDate())}.${pad(dateObj.getMonth()+1)}.`;
+}
+function toDateKey(dateObj){
+  return `${dateObj.getFullYear()}-${pad(dateObj.getMonth()+1)}-${pad(dateObj.getDate())}`;
+}
+function todayRangeISO(){
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+function getWeekDates(offset){
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday + offset*7);
+  const days = [];
+  for (let i=0;i<7;i++){
+    const d = new Date(monday);
+    d.setDate(monday.getDate()+i);
+    days.push(d);
+  }
+  return days;
+}
+
+function lastEntryType(entries){
+  if (!entries.length) return null;
+  return entries[entries.length - 1].typ;
+}
+
+function nextAllowedActions(entries){
+  const last = lastEntryType(entries);
+  if (!last) return { start: true, pauseStart: false, pauseEnd: false, end: false };
+  if (last === "arbeitsbeginn") return { start:false, pauseStart:true, pauseEnd:false, end:true };
+  if (last === "pause_beginn") return { start:false, pauseStart:false, pauseEnd:true, end:false };
+  if (last === "pause_ende") return { start:false, pauseStart:true, pauseEnd:false, end:true };
+  if (last === "arbeitsende") return { start:true, pauseStart:false, pauseEnd:false, end:false };
+  return { start:true, pauseStart:false, pauseEnd:false, end:false };
+}
+
+function calcPauseMinutes(entries){
+  let total = 0;
+  let pauseStart = null;
+  for (const e of entries){
+    if (e.typ === "pause_beginn") pauseStart = new Date(e.zeitpunkt);
+    if (e.typ === "pause_ende" && pauseStart){
+      total += (new Date(e.zeitpunkt) - pauseStart) / 60000;
+      pauseStart = null;
+    }
+  }
+  return Math.round(total);
+}
+
+function calcArbeitsMinutenBrutto(entries){
+  let start = null, end = null;
+  for (const e of entries){
+    if (e.typ === "arbeitsbeginn" && !start) start = new Date(e.zeitpunkt);
+    if (e.typ === "arbeitsende") end = new Date(e.zeitpunkt);
+  }
+  if (!start || !end) return 0;
+  return Math.round((end - start) / 60000);
+}
+
+function calcNettoMinuten(entries){
+  const brutto = calcArbeitsMinutenBrutto(entries);
+  const pause = calcPauseMinutes(entries);
+  return Math.max(0, brutto - pause);
+}
+
+function sollMinuten(soll){
+  if (!soll) return 0;
+  if (soll.typ === "urlaub" || soll.typ === "wft" || soll.typ === "krank") return 480;
+  if (soll.frei || !soll.start_zeit || !soll.end_zeit) return 0;
+  const [sh,sm] = soll.start_zeit.split(":").map(Number);
+  const [eh,em] = soll.end_zeit.split(":").map(Number);
+  let mins = (eh*60+em) - (sh*60+sm);
+  if (mins < 0) mins += 24*60;
+  return mins;
+}
+
+function toLocalInputValue(iso){
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function minToHM(min){
+  const sign = min < 0 ? "-" : "";
+  min = Math.abs(Math.round(min));
+  const h = Math.floor(min/60);
+  const m = min % 60;
+  return `${sign}${h}h ${pad(m)}min`;
+}
+
+async function loadEmployees(){
+  const { data, error } = await sb.from("mitarbeiter").select("*").order("created_at", { ascending: true });
+  if (error) { state.errorMsg = error.message; }
+  state.employees = data || [];
+}
+
+async function loadTodayEntries(employeeId){
+  const { start, end } = todayRangeISO();
+  const { data, error } = await sb.from("zeiteintraege")
+    .select("*")
+    .eq("mitarbeiter_id", employeeId)
+    .gte("zeitpunkt", start)
+    .lte("zeitpunkt", end)
+    .order("zeitpunkt", { ascending: true });
+  if (error) { state.errorMsg = error.message; return; }
+  state.todayEntries = data || [];
+}
+
+async function loadWeekData(employeeId, offset){
+  const days = getWeekDates(offset);
+  const start = new Date(days[0].getFullYear(), days[0].getMonth(), days[0].getDate(), 0,0,0).toISOString();
+  const end = new Date(days[6].getFullYear(), days[6].getMonth(), days[6].getDate(), 23,59,59).toISOString();
+
+  const { data: entries } = await sb.from("zeiteintraege")
+    .select("*").eq("mitarbeiter_id", employeeId)
+    .gte("zeitpunkt", start).lte("zeitpunkt", end)
+    .order("zeitpunkt", { ascending: true });
+
+  const { data: soll } = await sb.from("soll_dienste")
+    .select("*").eq("mitarbeiter_id", employeeId)
+    .gte("datum", toDateKey(days[0])).lte("datum", toDateKey(days[6]));
+
+  const entriesByDay = {};
+  days.forEach(d => entriesByDay[toDateKey(d)] = []);
+  (entries||[]).forEach(e => {
+    const key = toDateKey(new Date(e.zeitpunkt));
+    if (!entriesByDay[key]) entriesByDay[key] = [];
+    entriesByDay[key].push(e);
+  });
+
+  const sollByDay = {};
+  (soll||[]).forEach(s => { sollByDay[s.datum] = s; });
+
+  state.weekEntries = entriesByDay;
+  state.weekSoll = sollByDay;
+  state.weekSollDraft = {};
+  days.forEach(d => {
+    const key = toDateKey(d);
+    const s = sollByDay[key];
+    state.weekSollDraft[key] = {
+      start: s ? (s.start_zeit || "").slice(0,5) : "",
+      end: s ? (s.end_zeit || "").slice(0,5) : "",
+      frei: s ? s.frei : false,
+      typ: s ? (s.typ || "arbeit") : "arbeit"
+    };
+  });
+}
+
+async function addEntry(typ){
+  const { error } = await sb.from("zeiteintraege").insert({
+    mitarbeiter_id: state.currentEmployeeId,
+    typ,
+    zeitpunkt: new Date().toISOString()
+  });
+  if (error){ state.errorMsg = error.message; render(); return; }
+  await loadTodayEntries(state.currentEmployeeId);
+  render();
+}
+
+async function addEmployee(name){
+  name = name.trim();
+  if (!name) return;
+  const pin = prompt("Vergib einen PIN für diesen Namen (4-6 Ziffern):");
+  if (!pin || !/^\d{4,6}$/.test(pin)){ state.errorMsg = "Ungültiger PIN."; render(); return; }
+  const { data, error } = await sb.from("mitarbeiter").insert({ name, pin }).select().single();
+  if (error){ state.errorMsg = "Name schon vergeben oder Fehler: " + error.message; render(); return; }
+  await loadEmployees();
+  selectEmployee(data.id, data.name);
+}
+
+function selectEmployeeAttempt(emp){
+  const pin = prompt(`PIN für ${emp.name}:`);
+  if (pin === null) return;
+  if (String(pin) !== String(emp.pin)){
+    alert("Falscher PIN.");
+    return;
+  }
+  selectEmployee(emp.id, emp.name);
+}
+
+function selectEmployee(id, name){
+  state.currentEmployeeId = id;
+  state.currentEmployeeName = name;
+  localStorage.setItem("zt_employee_id", id);
+  localStorage.setItem("zt_employee_name", name);
+  state.view = "main";
+  state.tab = "heute";
+  loadTodayEntries(id).then(render);
+  render();
+}
+
+function switchUser(){
+  localStorage.removeItem("zt_employee_id");
+  localStorage.removeItem("zt_employee_name");
+  state.currentEmployeeId = null;
+  state.currentEmployeeName = null;
+  state.view = "pick-name";
+  render();
+}
+
+async function checkPin(pin){
+  const { data, error } = await sb.from("admin_settings").select("pin").eq("id", 1).single();
+  if (error){ state.errorMsg = error.message; render(); return; }
+  if (data.pin === pin){
+    state.errorMsg = null;
+    await loadAdminData();
+    state.view = "admin";
+  } else {
+    state.errorMsg = "Falscher PIN.";
+  }
+  render();
+}
+
+async function loadAdminData(){
+  const { start, end } = todayRangeISO();
+  await loadEmployees();
+  const results = [];
+  for (const emp of state.employees){
+    const { data } = await sb.from("zeiteintraege")
+      .select("*")
+      .eq("mitarbeiter_id", emp.id)
+      .gte("zeitpunkt", start)
+      .lte("zeitpunkt", end)
+      .order("zeitpunkt", { ascending: true });
+    results.push({ employee: emp, entries: data || [] });
+  }
+  const { data: settings } = await sb.from("admin_settings").select("pin").eq("id",1).single();
+  state.adminData = results;
+  state.adminPinValue = settings ? settings.pin : "1234";
+}
+
+async function updatePin(newPin){
+  if (!/^\d{4,6}$/.test(newPin)){
+    state.errorMsg = "PIN muss 4-6 Ziffern haben.";
+    render();
+    return;
+  }
+  const { error } = await sb.from("admin_settings").update({ pin: newPin }).eq("id", 1);
+  if (error){ state.errorMsg = error.message; }
+  else { state.errorMsg = null; state.adminPinValue = newPin; }
+  render();
+}
+
+async function deleteEntry(entryId, empId, oldTyp, oldZeit, grund){
+  await sb.from("zeiteintraege").delete().eq("id", entryId);
+  await sb.from("aenderungslog").insert({
+    mitarbeiter_id: empId,
+    eintrag_id: entryId,
+    aktion: "geloescht",
+    feld: "eintrag",
+    alter_wert: `${TYP_LABEL[oldTyp]} ${fmtTime(oldZeit)}`,
+    neuer_wert: null,
+    grund: grund || null
+  });
+  await loadAdminData();
+  render();
+}
+
+async function updateEntryZeit(entryId, empId, oldZeit, newZeitLocal, grund){
+  const newISO = new Date(newZeitLocal).toISOString();
+  const { error } = await sb.from("zeiteintraege").update({ zeitpunkt: newISO }).eq("id", entryId);
+  if (error){ state.errorMsg = error.message; render(); return; }
+  await sb.from("aenderungslog").insert({
+    mitarbeiter_id: empId,
+    eintrag_id: entryId,
+    aktion: "geaendert",
+    feld: "zeitpunkt",
+    alter_wert: fmtTime(oldZeit),
+    neuer_wert: fmtTime(newISO),
+    grund: grund || null
+  });
+  state.adminEditingEntry = null;
+  await loadAdminData();
+  render();
+}
+
+async function loadReferenzstaende(empId){
+  const { data } = await sb.from("referenzstaende")
+    .select("*").eq("mitarbeiter_id", empId)
+    .order("stichtag", { ascending: false });
+  state.referenzstaende = data || [];
+}
+
+async function addReferenzstand(empId, stichtag, saldoStr, notiz){
+  const saldoMin = Math.round(parseFloat(saldoStr.replace(",",".")) * 60);
+  if (isNaN(saldoMin)){ state.errorMsg = "Ungültiger Saldo-Wert."; render(); return; }
+  const { error } = await sb.from("referenzstaende").insert({
+    mitarbeiter_id: empId, stichtag, saldo_minuten: saldoMin, notiz: notiz || null
+  });
+  if (error){ state.errorMsg = error.message; }
+  else { state.errorMsg = null; }
+  await loadReferenzstaende(empId);
+  render();
+}
+
+async function loadAdminLog(){
+  const { data } = await sb.from("aenderungslog")
+    .select("*, mitarbeiter(name)")
+    .order("geaendert_am", { ascending: false })
+    .limit(100);
+  state.adminLog = data || [];
+}
+
+async function berechneAbweichungSeitStichtag(empId, stichtagISO){
+  // Summe Ist-Netto minus Soll seit dem Stichtag (exklusive) bis heute
+  const start = new Date(stichtagISO);
+  start.setDate(start.getDate() + 1);
+  const startKey = toDateKey(start);
+  const todayKey = toDateKey(new Date());
+
+  const { data: entries } = await sb.from("zeiteintraege")
+    .select("*").eq("mitarbeiter_id", empId)
+    .gte("zeitpunkt", start.toISOString());
+  const { data: soll } = await sb.from("soll_dienste")
+    .select("*").eq("mitarbeiter_id", empId)
+    .gte("datum", startKey).lte("datum", todayKey);
+
+  const entriesByDay = {};
+  (entries||[]).forEach(e => {
+    const key = toDateKey(new Date(e.zeitpunkt));
+    if (!entriesByDay[key]) entriesByDay[key] = [];
+    entriesByDay[key].push(e);
+  });
+  Object.values(entriesByDay).forEach(list => list.sort((a,b) => new Date(a.zeitpunkt) - new Date(b.zeitpunkt)));
+
+  const sollByDay = {};
+  (soll||[]).forEach(s => { sollByDay[s.datum] = s; });
+
+  let nettoTotal = 0, sollTotal = 0;
+  Object.keys(entriesByDay).forEach(key => {
+    nettoTotal += calcNettoMinuten(entriesByDay[key]);
+  });
+  Object.values(sollByDay).forEach(s => { sollTotal += sollMinuten(s); });
+
+  return nettoTotal - sollTotal;
+}
+
+async function saveWeekSoll(){
+  const days = getWeekDates(state.weekOffset);
+  const rows = days.map(d => {
+    const key = toDateKey(d);
+    const draft = state.weekSollDraft[key];
+    return {
+      mitarbeiter_id: state.currentEmployeeId,
+      datum: key,
+      start_zeit: (draft.frei || draft.typ !== "arbeit") ? null : (draft.start || null),
+      end_zeit: (draft.frei || draft.typ !== "arbeit") ? null : (draft.end || null),
+      frei: draft.frei,
+      typ: draft.typ
+    };
+  });
+  const { error } = await sb.from("soll_dienste").upsert(rows, { onConflict: "mitarbeiter_id,datum" });
+  if (error){ state.errorMsg = error.message; }
+  else { state.errorMsg = null; }
+  await loadWeekData(state.currentEmployeeId, state.weekOffset);
+  render();
+}
+
+function exportWeekCSV(){
+  const days = getWeekDates(state.weekOffset);
+  let csv = "Datum;Wochentag;Soll Start;Soll Ende;Soll Stunden;Ist Netto;Pause;Differenz\n";
+  days.forEach(d => {
+    const key = toDateKey(d);
+    const entries = state.weekEntries[key] || [];
+    const soll = state.weekSoll[key];
+    const sollMin = sollMinuten(soll);
+    const nettoMin = calcNettoMinuten(entries);
+    const pauseMin = calcPauseMinutes(entries);
+    const diff = nettoMin - sollMin;
+    csv += `${key};${WOCHENTAGE[d.getDay()]};${soll?soll.start_zeit||"":""};${soll?soll.end_zeit||"":""};${minToHM(sollMin)};${minToHM(nettoMin)};${pauseMin}min;${minToHM(diff)}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `zeiterfassung_${state.currentEmployeeName}_${toDateKey(days[0])}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function render(){
+  app.innerHTML = "";
+  if (state.view === "loading"){ app.innerHTML = '<div class="loading">Lädt…</div>'; return; }
+  if (state.view === "pick-name"){ renderPickName(); return; }
+  if (state.view === "main"){ renderMain(); return; }
+  if (state.view === "admin-pin"){ renderAdminPin(); return; }
+  if (state.view === "admin"){ renderAdmin(); return; }
+}
+
+function el(html){
+  const d = document.createElement("div");
+  d.innerHTML = html;
+  return d.firstElementChild;
+}
+
+function renderPickName(){
+  const container = el(`
+    <div>
+      <div class="eyebrow">Bar Zeiterfassung</div>
+      <h1>Wer bist du?</h1>
+      <div class="sub">Wähle deinen Namen, um Arbeits- und Pausenzeiten zu erfassen.</div>
+      <div class="name-list" id="nameList"></div>
+      <div class="add-name-form">
+        <input id="newNameInput" type="text" placeholder="Neuer Name…" />
+        <button id="addNameBtn">+</button>
+      </div>
+      ${state.errorMsg ? `<div class="error" style="margin-top:10px;">${state.errorMsg}</div>` : ""}
+      <div style="margin-top:24px; text-align:center;">
+        <button class="linkbtn" id="adminLink">Admin-Übersicht →</button>
+      </div>
+    </div>
+  `);
+  app.appendChild(container);
+
+  const list = container.querySelector("#nameList");
+  state.employees.forEach(emp => {
+    const btn = el(`<button class="name-btn">${emp.name}</button>`);
+    btn.onclick = () => selectEmployeeAttempt(emp);
+    list.appendChild(btn);
+  });
+
+  container.querySelector("#addNameBtn").onclick = () => {
+    const input = container.querySelector("#newNameInput");
+    addEmployee(input.value);
+  };
+  container.querySelector("#newNameInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addEmployee(e.target.value);
+  });
+  container.querySelector("#adminLink").onclick = () => {
+    state.view = "admin-pin";
+    state.errorMsg = null;
+    render();
+  };
+}
+
+function renderMain(){
+  const container = el(`
+    <div>
+      <div class="topbar">
+        <div class="whoami">Eingeloggt als <b>${state.currentEmployeeName}</b></div>
+        <button class="linkbtn" id="switchBtn">Wechseln</button>
+      </div>
+      <div class="tabbar">
+        <button class="tabbtn ${state.tab==='heute'?'active':''}" id="tabHeute">Heute</button>
+        <button class="tabbtn ${state.tab==='woche'?'active':''}" id="tabWoche">Woche &amp; Soll</button>
+      </div>
+      <div id="tabContent"></div>
+      <footer>
+        <button class="linkbtn" id="adminLink2">Admin-Übersicht →</button>
+      </footer>
+    </div>
+  `);
+  app.appendChild(container);
+
+  container.querySelector("#switchBtn").onclick = switchUser;
+  container.querySelector("#adminLink2").onclick = () => { state.view = "admin-pin"; state.errorMsg = null; render(); };
+  container.querySelector("#tabHeute").onclick = () => { state.tab = "heute"; render(); };
+  container.querySelector("#tabWoche").onclick = () => {
+    state.tab = "woche";
+    Promise.all([
+      loadWeekData(state.currentEmployeeId, state.weekOffset),
+      loadReferenzstaende(state.currentEmployeeId)
+    ]).then(render);
+  };
+
+  const content = container.querySelector("#tabContent");
+  if (state.tab === "heute") renderHeuteTab(content);
+  else renderWocheTab(content);
+}
+
+function renderHeuteTab(content){
+  const actions = nextAllowedActions(state.todayEntries);
+  const last = lastEntryType(state.todayEntries);
+  let statusText = "Noch nicht eingestempelt";
+  let statusClass = "off";
+  if (last === "arbeitsbeginn"){ statusText = "Im Dienst"; statusClass = "active"; }
+  if (last === "pause_beginn"){ statusText = "In der Pause"; statusClass = "paused"; }
+  if (last === "pause_ende"){ statusText = "Im Dienst"; statusClass = "active"; }
+  if (last === "arbeitsende"){ statusText = "Dienst beendet"; statusClass = "off"; }
+
+  const pauseMin = calcPauseMinutes(state.todayEntries);
+  const now = new Date();
+  const dateStr = `${WOCHENTAGE[now.getDay()]}, ${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
+
+  const block = el(`
+    <div>
+      <div class="status-card">
+        <div class="status-date">${dateStr}</div>
+        <div class="status-row">
+          <span class="status-label">Status</span>
+          <span class="status-value ${statusClass}">${statusText}</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="action-btn btn-start" id="btnStart" ${!actions.start ? "disabled" : ""}>
+          <span class="ico">▶</span> Arbeitsbeginn
+        </button>
+        <button class="action-btn btn-end" id="btnEnd" ${!actions.end ? "disabled" : ""}>
+          <span class="ico">■</span> Arbeitsende
+        </button>
+        <button class="action-btn btn-pause-start" id="btnPauseStart" ${!actions.pauseStart ? "disabled" : ""}>
+          <span class="ico">⏸</span> Pause Beginn
+        </button>
+        <button class="action-btn btn-pause-end" id="btnPauseEnd" ${!actions.pauseEnd ? "disabled" : ""}>
+          <span class="ico">▶</span> Pause Ende
+        </button>
+      </div>
+
+      <div class="day-total">
+        Heutige Pausenzeit (erfasst): <b>${pauseMin} Min.</b>
+      </div>
+
+      <div class="section-title">Heute erfasst</div>
+      <div class="entry-list" id="entryList"></div>
+    </div>
+  `);
+  content.appendChild(block);
+
+  const list = block.querySelector("#entryList");
+  if (!state.todayEntries.length){
+    list.appendChild(el(`<div class="empty-hint">Noch keine Einträge heute.</div>`));
+  } else {
+    [...state.todayEntries].reverse().forEach(e => {
+      list.appendChild(el(`
+        <div class="entry">
+          <span class="typ">${TYP_ICON[e.typ]} ${TYP_LABEL[e.typ]}</span>
+          <span class="zeit">${fmtTime(e.zeitpunkt)}</span>
+        </div>
+      `));
+    });
+  }
+
+  block.querySelector("#btnStart").onclick = () => addEntry("arbeitsbeginn");
+  block.querySelector("#btnEnd").onclick = () => addEntry("arbeitsende");
+  block.querySelector("#btnPauseStart").onclick = () => addEntry("pause_beginn");
+  block.querySelector("#btnPauseEnd").onclick = () => addEntry("pause_ende");
+}
+
+function renderWocheTab(content){
+  const days = getWeekDates(state.weekOffset);
+  const weekLabel = `${fmtDateShort(days[0])} – ${fmtDateShort(days[6])}`;
+
+  let sollTotal = 0, nettoTotal = 0;
+  days.forEach(d => {
+    const key = toDateKey(d);
+    sollTotal += sollMinuten(state.weekSoll[key]);
+    nettoTotal += calcNettoMinuten(state.weekEntries[key] || []);
+  });
+  const diffTotal = nettoTotal - sollTotal;
+
+  const block = el(`
+    <div>
+      <div class="week-nav">
+        <button id="prevWeek">←</button>
+        <span class="weeklabel">${weekLabel}</span>
+        <button id="nextWeek">→</button>
+      </div>
+
+      <div class="week-summary">
+        <div>Ist gesamt: <b>${minToHM(nettoTotal)}</b> &nbsp;·&nbsp; Soll gesamt: <b>${minToHM(sollTotal)}</b></div>
+        <div class="big" style="color:${diffTotal>=0?'var(--green)':'var(--red)'}; margin-top:4px;">
+          ${diffTotal>=0?'+':''}${minToHM(diffTotal)} ${diffTotal>=0?'Überstunden':'Minusstunden'}
+        </div>
+      </div>
+
+      <div class="section-title"><span>Ist vs. Soll pro Tag</span></div>
+      <div id="compareList"></div>
+
+      <div class="section-title" style="margin-top:8px;"><span>Soll-Dienst eintragen</span></div>
+      <div id="sollForm"></div>
+
+      <div class="savebar">
+        <button id="saveSollBtn">Soll-Dienste speichern</button>
+      </div>
+      ${state.errorMsg ? `<div class="error" style="margin-top:10px;">${state.errorMsg}</div>` : ""}
+
+      <div style="text-align:center; margin-top:18px;">
+        <button class="linkbtn" id="exportBtn">Woche als CSV exportieren</button>
+      </div>
+    </div>
+  `);
+  content.appendChild(block);
+
+  const compareList = block.querySelector("#compareList");
+  days.forEach(d => {
+    const key = toDateKey(d);
+    const soll = state.weekSoll[key];
+    const entries = state.weekEntries[key] || [];
+    const sollMin = sollMinuten(soll);
+    const nettoMin = calcNettoMinuten(entries);
+    const pauseMin = calcPauseMinutes(entries);
+    const diff = nettoMin - sollMin;
+    const pillClass = diff > 0 ? "diff-pos" : (diff < 0 ? "diff-neg" : "diff-zero");
+    const card = el(`
+      <div class="compare-card">
+        <div class="compare-head">
+          <span class="dname">${WOCHENTAGE_KURZ[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth()+1)}.</span>
+          <span class="diff-pill ${pillClass}">${diff===0?'±0':(diff>0?'+':'')+minToHM(diff)}</span>
+        </div>
+        <div class="compare-row"><span>Soll</span><b>${soll && soll.frei ? "Frei" : (soll && soll.typ && soll.typ !== 'arbeit' ? SOLL_TYP_LABEL[soll.typ] + " (" + minToHM(sollMin) + ")" : minToHM(sollMin))}</b></div>
+        <div class="compare-row"><span>Ist (netto)</span><b>${minToHM(nettoMin)}</b></div>
+        <div class="compare-row"><span>Pause erfasst</span><b>${pauseMin} min</b></div>
+      </div>
+    `);
+    compareList.appendChild(card);
+  });
+
+  const sollForm = block.querySelector("#sollForm");
+  days.forEach(d => {
+    const key = toDateKey(d);
+    const draft = state.weekSollDraft[key];
+    const card = el(`
+      <div class="day-card">
+        <div class="day-card-head">
+          <span class="dname">${WOCHENTAGE[d.getDay()]}</span>
+          <span class="ddate">${pad(d.getDate())}.${pad(d.getMonth()+1)}.</span>
+        </div>
+        <select class="soll-typ" style="width:100%; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px; margin-bottom:8px;">
+          <option value="arbeit" ${!draft.frei && draft.typ==='arbeit'?'selected':''}>Arbeit</option>
+          <option value="frei" ${draft.frei?'selected':''}>Frei / kein Dienst</option>
+          <option value="urlaub" ${!draft.frei && draft.typ==='urlaub'?'selected':''}>Urlaub (8h)</option>
+          <option value="wft" ${!draft.frei && draft.typ==='wft'?'selected':''}>Wochenfeiertag (8h)</option>
+          <option value="krank" ${!draft.frei && draft.typ==='krank'?'selected':''}>Krank (8h)</option>
+        </select>
+        <div class="day-inputs" style="display:${(!draft.frei && draft.typ==='arbeit')?'flex':'none'};">
+          <input type="time" class="soll-start" value="${draft.start}" />
+          <span style="color:var(--text-dim);">–</span>
+          <input type="time" class="soll-end" value="${draft.end}" />
+        </div>
+      </div>
+    `);
+    const startInput = card.querySelector(".soll-start");
+    const endInput = card.querySelector(".soll-end");
+    const typSelect = card.querySelector(".soll-typ");
+    const timeRow = card.querySelector(".day-inputs");
+    startInput.oninput = () => { state.weekSollDraft[key].start = startInput.value; };
+    endInput.oninput = () => { state.weekSollDraft[key].end = endInput.value; };
+    typSelect.onchange = () => {
+      const val = typSelect.value;
+      if (val === "frei"){
+        state.weekSollDraft[key].frei = true;
+        state.weekSollDraft[key].typ = "arbeit";
+      } else {
+        state.weekSollDraft[key].frei = false;
+        state.weekSollDraft[key].typ = val;
+      }
+      timeRow.style.display = (val === "arbeit") ? "flex" : "none";
+    };
+    sollForm.appendChild(card);
+  });
+
+  block.querySelector("#prevWeek").onclick = () => {
+    state.weekOffset -= 1;
+    loadWeekData(state.currentEmployeeId, state.weekOffset).then(render);
+  };
+  block.querySelector("#nextWeek").onclick = () => {
+    state.weekOffset += 1;
+    loadWeekData(state.currentEmployeeId, state.weekOffset).then(render);
+  };
+  block.querySelector("#saveSollBtn").onclick = saveWeekSoll;
+  block.querySelector("#exportBtn").onclick = exportWeekCSV;
+
+  renderReferenzstandBox(block);
+}
+
+function renderReferenzstandBox(block){
+  const box = el(`
+    <div style="margin-top:24px;">
+      <div class="section-title"><span>DutyWizard-Stand abgleichen</span></div>
+      <div class="day-card">
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <input type="date" id="refDatum" style="flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px;" />
+          <input type="text" id="refSaldo" placeholder="z.B. 38,47" style="width:100px; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px;" />
+        </div>
+        <input type="text" id="refNotiz" placeholder="Notiz (optional)" style="width:100%; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px; margin-bottom:10px;" />
+        <button class="small-btn" id="refSaveBtn" style="width:100%; padding:10px;">Stand speichern (in Stunden, z.B. 38,47)</button>
+      </div>
+      <div id="refList"></div>
+    </div>
+  `);
+  block.appendChild(box);
+
+  box.querySelector("#refSaveBtn").onclick = () => {
+    const datum = box.querySelector("#refDatum").value;
+    const saldo = box.querySelector("#refSaldo").value;
+    const notiz = box.querySelector("#refNotiz").value;
+    if (!datum || !saldo) { state.errorMsg = "Datum und Saldo angeben."; render(); return; }
+    addReferenzstand(state.currentEmployeeId, datum, saldo, notiz);
+  };
+
+  const list = box.querySelector("#refList");
+  if (!state.referenzstaende.length){
+    list.appendChild(el(`<div class="empty-hint">Noch kein DutyWizard-Stand hinterlegt.</div>`));
+    return;
+  }
+
+  state.referenzstaende.forEach((r, idx) => {
+    const d = new Date(r.stichtag);
+    const dateStr = `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+    const card = el(`
+      <div class="compare-card">
+        <div class="compare-head">
+          <span class="dname">Stand ${dateStr}</span>
+          <span class="diff-pill diff-zero">${minToHM(r.saldo_minuten)}</span>
+        </div>
+        ${r.notiz ? `<div class="compare-row"><span>Notiz</span><b>${r.notiz}</b></div>` : ""}
+        <div id="refCompare-${idx}" class="compare-row"><span>Vergleich seitdem</span><b>lädt…</b></div>
+      </div>
+    `);
+    list.appendChild(card);
+
+    berechneAbweichungSeitStichtag(state.currentEmployeeId, r.stichtag).then(diffSeitStichtag => {
+      const erwarteterStandHeute = r.saldo_minuten + diffSeitStichtag;
+      const target = card.querySelector(`#refCompare-${idx}`);
+      target.innerHTML = `<span>Unsere App seit Stichtag</span><b>${diffSeitStichtag>=0?'+':''}${minToHM(diffSeitStichtag)}</b>`;
+      const extra = el(`
+        <div class="compare-row" style="margin-top:4px; padding-top:4px; border-top:1px solid var(--line);">
+          <span>Erwarteter Stand heute</span><b style="color:var(--amber);">${minToHM(erwarteterStandHeute)}</b>
+        </div>
+      `);
+      card.appendChild(extra);
+    });
+  });
+}
+
+function renderAdminPin(){
+  const container = el(`
+    <div>
+      <div class="eyebrow">Admin</div>
+      <h1>PIN eingeben</h1>
+      <div class="sub">Zugriff auf die Übersicht aller Mitarbeiter.</div>
+      <div class="pin-box">
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" />
+        <button id="pinSubmit">Bestätigen</button>
+        ${state.errorMsg ? `<div class="error">${state.errorMsg}</div>` : ""}
+      </div>
+      <div style="margin-top:20px; text-align:center;">
+        <button class="linkbtn" id="backBtn">← Zurück</button>
+      </div>
+    </div>
+  `);
+  app.appendChild(container);
+  container.querySelector("#pinSubmit").onclick = () => checkPin(container.querySelector("#pinInput").value.trim());
+  container.querySelector("#pinInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkPin(e.target.value.trim());
+  });
+  container.querySelector("#backBtn").onclick = () => {
+    state.view = state.currentEmployeeId ? "main" : "pick-name";
+    state.errorMsg = null;
+    render();
+  };
+}
+
+function renderAdmin(){
+  const container = el(`
+    <div>
+      <div class="eyebrow">Admin</div>
+      <h1>Übersicht</h1>
+      <div class="sub">Alle erfassten Zeiten des Teams.</div>
+
+      <div class="tabbar">
+        <button class="tabbtn ${state.adminTab==='heute'?'active':''}" id="adminTabHeute">Heute</button>
+        <button class="tabbtn ${state.adminTab==='log'?'active':''}" id="adminTabLog">Änderungslog</button>
+      </div>
+
+      <div class="settings-row">
+        <span>Admin-PIN ändern</span>
+        <span style="display:flex; gap:8px;">
+          <input id="newPinInput" type="text" inputmode="numeric" maxlength="6" placeholder="${state.adminPinValue || ''}" />
+          <button class="small-btn" id="savePinBtn">Speichern</button>
+        </span>
+      </div>
+      ${state.errorMsg ? `<div class="error" style="margin-bottom:14px;">${state.errorMsg}</div>` : ""}
+
+      <div id="adminContent"></div>
+
+      <footer>
+        <button class="linkbtn" id="backBtn2">← Zurück</button>
+      </footer>
+    </div>
+  `);
+  app.appendChild(container);
+
+  container.querySelector("#adminTabHeute").onclick = () => { state.adminTab = "heute"; render(); };
+  container.querySelector("#adminTabLog").onclick = () => {
+    state.adminTab = "log";
+    loadAdminLog().then(render);
+  };
+
+  const content = container.querySelector("#adminContent");
+  if (state.adminTab === "heute") renderAdminHeute(content);
+  else renderAdminLog(content);
+
+  container.querySelector("#savePinBtn").onclick = () => {
+    const val = container.querySelector("#newPinInput").value.trim();
+    if (val) updatePin(val);
+  };
+  container.querySelector("#backBtn2").onclick = () => {
+    state.view = state.currentEmployeeId ? "main" : "pick-name";
+    state.errorMsg = null;
+    render();
+  };
+}
+
+function renderAdminHeute(content){
+  const list = el(`<div id="adminList"></div>`);
+  content.appendChild(list);
+  state.adminData.forEach(({ employee, entries }) => {
+    const pauseMin = calcPauseMinutes(entries);
+    const nettoMin = calcNettoMinuten(entries);
+    const last = lastEntryType(entries);
+    const block = el(`
+      <div class="admin-emp-block">
+        <div class="admin-emp-name">
+          <span>${employee.name}</span>
+          <span class="badge">${last ? TYP_LABEL[last] : "kein Eintrag"} · Netto ${minToHM(nettoMin)} · Pause ${pauseMin} min</span>
+        </div>
+        <div class="entry-list"></div>
+      </div>
+    `);
+    const innerList = block.querySelector(".entry-list");
+    if (!entries.length){
+      innerList.appendChild(el(`<div class="empty-hint">Keine Einträge heute.</div>`));
+    } else {
+      entries.forEach(e => {
+        const isEditing = state.adminEditingEntry === e.id;
+        const row = el(`
+          <div class="entry" style="flex-direction:column; align-items:stretch; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="typ">${TYP_ICON[e.typ]} ${TYP_LABEL[e.typ]}</span>
+              <span class="zeit" style="display:flex; align-items:center; gap:10px;">
+                ${fmtTime(e.zeitpunkt)}
+                <button class="linkbtn" data-act="edit">✎</button>
+                <button class="linkbtn" style="color:var(--red);" data-act="del">✕</button>
+              </span>
+            </div>
+            ${isEditing ? `
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <input type="datetime-local" class="edit-zeit" value="${toLocalInputValue(e.zeitpunkt)}"
+                  style="background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px;" />
+                <input type="text" class="edit-grund" placeholder="Grund (optional)"
+                  style="background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px; border-radius:8px; font-size:13px;" />
+                <div style="display:flex; gap:8px;">
+                  <button class="small-btn save-edit" style="flex:1;">Speichern</button>
+                  <button class="linkbtn cancel-edit">Abbrechen</button>
+                </div>
+              </div>
+            ` : ""}
+          </div>
+        `);
+        row.querySelector('[data-act="del"]').onclick = () => {
+          const grund = prompt("Grund für Löschung (optional):") || "";
+          deleteEntry(e.id, employee.id, e.typ, e.zeitpunkt, grund);
+        };
+        row.querySelector('[data-act="edit"]').onclick = () => {
+          state.adminEditingEntry = isEditing ? null : e.id;
+          render();
+        };
+        if (isEditing){
+          row.querySelector(".save-edit").onclick = () => {
+            const newVal = row.querySelector(".edit-zeit").value;
+            const grund = row.querySelector(".edit-grund").value;
+            updateEntryZeit(e.id, employee.id, e.zeitpunkt, newVal, grund);
+          };
+          row.querySelector(".cancel-edit").onclick = () => {
+            state.adminEditingEntry = null;
+            render();
+          };
+        }
+        innerList.appendChild(row);
+      });
+    }
+    list.appendChild(block);
+  });
+}
+
+function renderAdminLog(content){
+  const box = el(`<div id="logList"></div>`);
+  content.appendChild(box);
+
+  if (!state.adminLog.length){
+    box.appendChild(el(`<div class="empty-hint">Noch keine Änderungen protokolliert.</div>`));
+    return;
+  }
+
+  state.adminLog.forEach(l => {
+    const name = l.mitarbeiter ? l.mitarbeiter.name : "?";
+    const d = new Date(l.geaendert_am);
+    const zeitStr = `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const aktionLabel = l.aktion === "geloescht" ? "Gelöscht" : "Geändert";
+    const row = el(`
+      <div class="entry" style="flex-direction:column; align-items:stretch; gap:4px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span class="typ">${aktionLabel} · ${name}</span>
+          <span class="zeit">${zeitStr}</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim);">
+          ${l.alter_wert ? `Vorher: <b style="color:var(--text);">${l.alter_wert}</b>` : ""}
+          ${l.neuer_wert ? ` → Nachher: <b style="color:var(--text);">${l.neuer_wert}</b>` : ""}
+        </div>
+        ${l.grund ? `<div style="font-size:12px; color:var(--amber);">Grund: ${l.grund}</div>` : ""}
+      </div>
+    `);
+    box.appendChild(row);
+  });
+}
+
+async function init(){
+  await loadEmployees();
+  if (state.currentEmployeeId){
+    const stillExists = state.employees.find(e => e.id === state.currentEmployeeId);
+    if (stillExists){
+      state.view = "main";
+      await loadTodayEntries(state.currentEmployeeId);
+    } else {
+      state.view = "pick-name";
+    }
+  } else {
+    state.view = "pick-name";
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
